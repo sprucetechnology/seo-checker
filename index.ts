@@ -69,6 +69,7 @@ interface PageMetadata {
   error?: string;
   suggestedTitle?: string;
   suggestedDescription?: string;
+  html?: string;
 }
 
 interface SitemapUrl {
@@ -278,7 +279,6 @@ if (!options.force) {
           (page.titleScore === "needs improvement" || page.descriptionScore === "needs improvement") &&
           (!page.suggestedTitle || !page.suggestedDescription)
         ) {
-          // We need HTML to generate suggestions. If not cached, skip.
           if (page.html) {
             const suggestions = await suggestTitleAndDescription({
               html: page.html,
@@ -289,7 +289,8 @@ if (!options.force) {
             if (suggestions.suggestedTitle || suggestions.suggestedDescription) {
               page.suggestedTitle = suggestions.suggestedTitle;
               page.suggestedDescription = suggestions.suggestedDescription;
-              updated = true;
+              // Save progress after each update
+              Deno.writeTextFileSync(cacheFilename, JSON.stringify({ ...cache, pages: results }, null, 2));
             }
           }
         }
@@ -535,6 +536,7 @@ async function extractMetadata(url: string, depth: number, sitemapData?: { lastm
       changefreq: sitemapData?.changefreq || null,
       suggestedTitle,
       suggestedDescription,
+      html,
     };
   } catch (error) {
     const message = typeof error === "object" && error && "message" in error ? (error as any).message : String(error);
@@ -949,6 +951,13 @@ async function crawl() {
     for (const result of batchResults) {
       if (!result) continue;
       results.push(result);
+      // Save progress after each page
+      Deno.writeTextFileSync(cacheFilename, JSON.stringify({
+        crawlDate: new Date().toISOString(),
+        baseUrl,
+        options,
+        pages: results,
+      }, null, 2));
       // If we're following links and haven't reached max depth, add links to the queue
       if (options.followLinks && result.depth < options.depth) {
         for (const link of result.links) {
