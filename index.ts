@@ -6,6 +6,10 @@ import * as colors from "https://deno.land/std/fmt/colors.ts";
 import * as path from "https://deno.land/std/path/mod.ts";
 import { parse as parseXml } from "https://deno.land/x/xml/mod.ts";
 import { Table } from "https://deno.land/x/cliffy@v1.0.0-rc.4/table/mod.ts";
+import OpenAI from "openai";
+import "https://deno.land/std@0.224.0/dotenv/load.ts";
+
+const openai = new OpenAI();
 
 // Define types
 interface CrawlOptions {
@@ -63,6 +67,8 @@ interface PageMetadata {
   priority?: string | null;
   changefreq?: string | null;
   error?: string;
+  suggestedTitle?: string;
+  suggestedDescription?: string;
 }
 
 interface SitemapUrl {
@@ -265,6 +271,32 @@ if (!options.force) {
         priority: p.priority || null,
         changefreq: p.changefreq || null,
       })) : [];
+      // --- NEW: Run OpenAI suggestions on cached data ---
+      let updated = false;
+      for (const page of results) {
+        if (
+          (page.titleScore === "needs improvement" || page.descriptionScore === "needs improvement") &&
+          (!page.suggestedTitle || !page.suggestedDescription)
+        ) {
+          // We need HTML to generate suggestions. If not cached, skip.
+          if (page.html) {
+            const suggestions = await suggestTitleAndDescription({
+              html: page.html,
+              url: page.url,
+              currentTitle: page.title,
+              currentDescription: page.description,
+            });
+            if (suggestions.suggestedTitle || suggestions.suggestedDescription) {
+              page.suggestedTitle = suggestions.suggestedTitle;
+              page.suggestedDescription = suggestions.suggestedDescription;
+              updated = true;
+            }
+          }
+        }
+      }
+      if (updated) {
+        Deno.writeTextFileSync(cacheFilename, JSON.stringify({ ...cache, pages: results }, null, 2));
+      }
       generateReport();
       Deno.exit(0);
     }
@@ -456,6 +488,20 @@ async function extractMetadata(url: string, depth: number, sitemapData?: { lastm
     // Check if this URL was in the sitemap
     const inSitemap = sitemapUrls.some((item) => item.url === url);
     
+    // --- SUGGESTION LOGIC ---
+    let suggestedTitle: string | undefined = undefined;
+    let suggestedDescription: string | undefined = undefined;
+    if (titleScore === "needs improvement" || descriptionScore === "needs improvement") {
+      const suggestions = await suggestTitleAndDescription({
+        html,
+        url,
+        currentTitle: title,
+        currentDescription: description,
+      });
+      suggestedTitle = suggestions.suggestedTitle;
+      suggestedDescription = suggestions.suggestedDescription;
+    }
+    
     console.log(colors.green(`Processed ${url}`));
     
     return {
@@ -487,6 +533,8 @@ async function extractMetadata(url: string, depth: number, sitemapData?: { lastm
       lastmod: sitemapData?.lastmod || null,
       priority: sitemapData?.priority || null,
       changefreq: sitemapData?.changefreq || null,
+      suggestedTitle,
+      suggestedDescription,
     };
   } catch (error) {
     const message = typeof error === "object" && error && "message" in error ? (error as any).message : String(error);
@@ -520,6 +568,55 @@ async function extractMetadata(url: string, depth: number, sitemapData?: { lastm
       inSitemap: false,
       error: message,
     };
+  }
+}
+
+// Suggest title and description using OpenAI LLM
+async function suggestTitleAndDescription({ html, url, currentTitle, currentDescription }: { html: string; url: string; currentTitle?: string; currentDescription?: string; }): Promise<{ suggestedTitle?: string; suggestedDescription?: string }> {
+  try {
+    // Compose a prompt for the LLM
+    let prompt = `You are an expert SEO assistant. Given the following HTML content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters) and meta description (max 155 characters) for SEO.\n`;
+    if (currentTitle) {
+      prompt += `\nCurrent title: "${currentTitle}"`;
+    }
+    if (currentDescription) {
+      prompt += `\nCurrent description: "${currentDescription}"`;
+    }
+    prompt += `\nHTML:\n${html.substring(0, 4000)}\n---\nRespond in JSON with keys 'suggestedTitle' and 'suggestedDescription'.`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-1106-preview",
+      messages: [
+        { role: "system", content: "You are a helpful assistant for SEO metadata optimization." },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 300,
+      temperature: 0.7,
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (content) {
+      try {
+        const parsed = JSON.parse(content);
+        return {
+          suggestedTitle: parsed.suggestedTitle,
+          suggestedDescription: parsed.suggestedDescription,
+        };
+      } catch (e) {
+        // fallback: try to extract from text
+        const matchTitle = content.match(/"suggestedTitle"\s*:\s*"([^"]+)"/);
+        const matchDesc = content.match(/"suggestedDescription"\s*:\s*"([^"]+)"/);
+        return {
+          suggestedTitle: matchTitle ? matchTitle[1] : undefined,
+          suggestedDescription: matchDesc ? matchDesc[1] : undefined,
+        };
+      }
+    }
+    return {};
+  } catch (e) {
+    console.error("OpenAI LLM suggestion error:", e);
+    return {};
   }
 }
 
@@ -619,11 +716,12 @@ function generateHtmlReport(report: any, filename: string) {
         <th>#</th>
         <th>URL</th>
         <th>Title</th>
+        <th>Suggested Title</th>
         <th>Title Score</th>
         <th>Description</th>
+        <th>Suggested Description</th>
         <th>Description Score</th>
         <th>H1</th>
-        <th>H1 Score</th>
         <th>Canonical</th>
         <th>In Sitemap</th>
         <th>Errors</th>
@@ -633,8 +731,10 @@ function generateHtmlReport(report: any, filename: string) {
           <td class="nowrap">${i + 1}</td>
           <td class="nowrap"><a href="${escapeHtml(p.url)}" target="_blank">${escapeHtml(p.url)}</a></td>
           <td>${escapeHtml(p.title)}</td>
+          <td>${escapeHtml(p.suggestedTitle || "")}</td>
           <td class="nowrap"><span class="score-${p.titleScore === "good" ? "good" : "bad"}">${escapeHtml(p.titleScore)}</span></td>
           <td>${escapeHtml(p.description)}</td>
+          <td>${escapeHtml(p.suggestedDescription || "")}</td>
           <td class="nowrap"><span class="score-${p.descriptionScore === "good" ? "good" : "bad"}">${escapeHtml(p.descriptionScore)}</span></td>
           <td>${escapeHtml(p.h1Text)}</td>
           <td class="nowrap"><span class="score-${p.h1Score === "good" ? "good" : "bad"}">${escapeHtml(p.h1Score)}</span></td>
@@ -708,14 +808,15 @@ function generateReport() {
       const flattenedResults = results.map(page => ({
         url: page.url,
         title: page.title || "",
+        suggestedTitle: page.suggestedTitle || "",
         titleLength: page.titleLength || 0,
         titleScore: page.titleScore || "",
         description: page.description || "",
+        suggestedDescription: page.suggestedDescription || "",
         descriptionLength: page.descriptionLength || 0,
         descriptionScore: page.descriptionScore || "",
         keywords: page.keywords || "",
         keywordsCount: page.keywordsCount || 0,
-        keywordsScore: page.keywordsScore || "",
         h1Count: page.h1Count || 0,
         h1Score: page.h1Score || "",
         h1Text: page.h1Text || "",
