@@ -258,52 +258,22 @@ let sitemapUrls: SitemapUrl[] = [];
 // --- CACHE CHECK BEFORE CRAWL ---
 ensureOutputDir();
 const cacheFilename = `output/${getCacheFilenameFromUrl(baseUrl)}.json`;
-if (!options.force) {
-  try {
-    const cacheText = Deno.readTextFileSync(cacheFilename);
-    const cache = JSON.parse(cacheText);
-    if (cache.crawlDate && Date.now() - new Date(cache.crawlDate).getTime() < 24 * 60 * 60 * 1000) {
-      console.log(colors.bgYellow(colors.black("[CACHE] Using cached crawl data (less than 1 day old). Use --force to refresh.")));
-      // Use cached results for report
-      results.push(...(cache.pages || []));
-      sitemapUrls = cache.pages ? cache.pages.filter((p: any) => p.inSitemap).map((p: any) => ({
-        url: p.url,
-        lastmod: p.lastmod || null,
-        priority: p.priority || null,
-        changefreq: p.changefreq || null,
-      })) : [];
-      // --- NEW: Run OpenAI suggestions on cached data ---
-      let updated = false;
-      for (const page of results) {
-        if (
-          (page.titleScore === "needs improvement" || page.descriptionScore === "needs improvement") &&
-          (!page.suggestedTitle || !page.suggestedDescription)
-        ) {
-          if (page.html) {
-            const suggestions = await suggestTitleAndDescription({
-              html: page.html,
-              url: page.url,
-              currentTitle: page.title,
-              currentDescription: page.description,
-            });
-            if (suggestions.suggestedTitle || suggestions.suggestedDescription) {
-              page.suggestedTitle = suggestions.suggestedTitle;
-              page.suggestedDescription = suggestions.suggestedDescription;
-              // Save progress after each update
-              Deno.writeTextFileSync(cacheFilename, JSON.stringify({ ...cache, pages: results }, null, 2));
-            }
-          }
-        }
-      }
-      if (updated) {
-        Deno.writeTextFileSync(cacheFilename, JSON.stringify({ ...cache, pages: results }, null, 2));
-      }
-      generateReport();
-      Deno.exit(0);
-    }
-  } catch (_) {
-    // Ignore cache errors
+try {
+  const cacheText = Deno.readTextFileSync(cacheFilename);
+  const cache = JSON.parse(cacheText);
+  if (cache.pages) {
+    results.push(...cache.pages);
   }
+  if (cache.pages) {
+    sitemapUrls = cache.pages.filter((p: any) => p.inSitemap).map((p: any) => ({
+      url: p.url,
+      lastmod: p.lastmod || null,
+      priority: p.priority || null,
+      changefreq: p.changefreq || null,
+    }));
+  }
+} catch (_) {
+  // Ignore cache errors
 }
 
 // Add the initial URL to the queue if we're not using sitemap-only mode
@@ -902,6 +872,11 @@ function generateReport() {
   }
 }
 
+// Utility to get a cached page by URL
+function getCachedPage(url: string): PageMetadata | undefined {
+  return results.find((p) => p.url === url);
+}
+
 // Main crawl function
 async function crawl() {
   console.log(colors.blue(`Starting crawl of ${baseUrl} with max depth ${options.depth} and limit ${options.limit}`));
@@ -910,18 +885,21 @@ async function crawl() {
   console.log(colors.blue(`Attempting to parse sitemap at ${sitemapUrl}`));
   sitemapUrls = await parseSitemap(sitemapUrl as string);
   
-  // Add sitemap URLs to the queue
+  // Add sitemap URLs to the queue if not already in results
   for (const item of sitemapUrls) {
     if (!visited.has(item.url) && processed < options.limit) {
-      queue.push({
-        url: item.url,
-        depth: 0,
-        sitemapData: {
-          lastmod: item.lastmod,
-          priority: item.priority,
-          changefreq: item.changefreq,
-        },
-      });
+      // Only add to queue if not already in results (cache)
+      if (!results.find((p) => p.url === item.url)) {
+        queue.push({
+          url: item.url,
+          depth: 0,
+          sitemapData: {
+            lastmod: item.lastmod,
+            priority: item.priority,
+            changefreq: item.changefreq,
+          },
+        });
+      }
     }
   }
   
@@ -932,19 +910,25 @@ async function crawl() {
       Deno.exit(0);
     }
   } else {
-    console.log(colors.green(`Added ${sitemapUrls.length} URLs from sitemap to the crawl queue.`));
+    console.log(colors.green(`Added ${queue.length} URLs from sitemap to the crawl queue (not already cached).`));
   }
 
   while (queue.length > 0 && processed < options.limit) {
     // Process up to concurrency items in parallel
     const batch = queue.splice(0, options.concurrency);
-    const promises = batch.map(item => {
+    const promises = batch.map(async item => {
       if (visited.has(item.url)) {
-        return Promise.resolve(null);
+        return null;
       }
       visited.add(item.url);
       processed++;
-      return extractMetadata(item.url, item.depth, item.sitemapData);
+      // --- NEW: Check cache before fetching ---
+      const cached = getCachedPage(item.url);
+      if (cached) {
+        return cached;
+      }
+      // Not cached, fetch and extract
+      return await extractMetadata(item.url, item.depth, item.sitemapData);
     });
     const batchResults = await Promise.all(promises);
     // Process results and add new URLs to the queue
@@ -958,6 +942,82 @@ async function crawl() {
         options,
         pages: results,
       }, null, 2));
+      // Also save to the main output file in the selected format
+      const filename = `${options.output}.${options.format}`;
+      if (options.format === "json") {
+        Deno.writeTextFileSync(`output/${filename}`,
+          JSON.stringify({
+            crawlDate: new Date().toISOString(),
+            baseUrl,
+            options,
+            pages: results,
+          }, null, 2)
+        );
+      } else if (options.format === "csv") {
+        // Flatten the objects for CSV
+        const flattenedResults = results.map(page => ({
+          url: page.url,
+          title: page.title || "",
+          suggestedTitle: page.suggestedTitle || "",
+          titleLength: page.titleLength || 0,
+          titleScore: page.titleScore || "",
+          description: page.description || "",
+          suggestedDescription: page.suggestedDescription || "",
+          descriptionLength: page.descriptionLength || 0,
+          descriptionScore: page.descriptionScore || "",
+          keywords: page.keywords || "",
+          keywordsCount: page.keywordsCount || 0,
+          h1Count: page.h1Count || 0,
+          h1Score: page.h1Score || "",
+          h1Text: page.h1Text || "",
+          canonicalUrl: page.canonicalUrl || "",
+          ogTitle: page.ogTitle || "",
+          ogDescription: page.ogDescription || "",
+          ogImage: page.ogImage || "",
+          twitterCard: page.twitterCard || "",
+          twitterTitle: page.twitterTitle || "",
+          twitterDescription: page.twitterDescription || "",
+          twitterImage: page.twitterImage || "",
+          robots: page.robots || "",
+          depth: page.depth,
+          inSitemap: page.inSitemap ? "yes" : "no",
+          lastmod: page.lastmod || "",
+          priority: page.priority || "",
+          changefreq: page.changefreq || "",
+          error: page.error || "",
+        }));
+        const csv = jsonToCsv(flattenedResults);
+        Deno.writeTextFileSync(`output/${filename}`, csv);
+      } else if (options.format === "html") {
+        // Generate a partial HTML report (with current results)
+        generateHtmlReport({
+          summary: {
+            totalPages: results.length,
+            pagesWithTitle: results.filter(r => r.title).length,
+            pagesWithDescription: results.filter(r => r.description).length,
+            pagesWithKeywords: results.filter(r => r.keywords).length,
+            pagesWithH1: results.filter(r => r.h1Count > 0).length,
+            pagesWithCanonical: results.filter(r => r.canonicalUrl).length,
+            pagesWithOgTags: results.filter(r => r.ogTitle || r.ogDescription || r.ogImage).length,
+            pagesWithTwitterTags: results.filter(r => r.twitterCard || r.twitterTitle || r.twitterDescription || r.twitterImage).length,
+            pagesWithTitleIssues: results.filter(r => r.titleScore === "needs improvement").length,
+            pagesWithDescriptionIssues: results.filter(r => r.descriptionScore === "needs improvement").length,
+            pagesWithH1Issues: results.filter(r => r.h1Score === "needs improvement").length,
+            pagesWithErrors: results.filter(r => r.error).length,
+            titleCompleteness: Math.round((results.filter(r => r.title).length / results.length) * 100),
+            descriptionCompleteness: Math.round((results.filter(r => r.description).length / results.length) * 100),
+            keywordsCompleteness: Math.round((results.filter(r => r.keywords).length / results.length) * 100),
+            h1Completeness: Math.round((results.filter(r => r.h1Count > 0).length / results.length) * 100),
+            canonicalCompleteness: Math.round((results.filter(r => r.canonicalUrl).length / results.length) * 100),
+            pagesInSitemap: results.filter(r => r.inSitemap).length,
+            pagesNotInSitemap: results.filter(r => !r.inSitemap).length,
+          },
+          crawlDate: new Date().toISOString(),
+          baseUrl,
+          options,
+          pages: results,
+        }, `output/${filename}`);
+      }
       // If we're following links and haven't reached max depth, add links to the queue
       if (options.followLinks && result.depth < options.depth) {
         for (const link of result.links) {
