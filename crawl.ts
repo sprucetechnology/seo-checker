@@ -80,6 +80,12 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
       if (visited.has(item.url)) return null;
       visited.add(item.url);
       processed++;
+      // Check if we have a cached result with all suggested values
+      const cached = results.find(r => r.url === item.url);
+      if (cached && cached.suggestedTitle && cached.suggestedDescription && cached.suggestedKeywords) {
+        console.log(colors.gray(`Using cached metadata for ${item.url}`));
+        return cached;
+      }
       try {
         const meta = await extractMetadata({
           url: item.url,
