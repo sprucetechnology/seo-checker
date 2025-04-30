@@ -111,15 +111,14 @@ deno run --allow-net --allow-read --allow-write --allow-env main.ts \
       "title": "jcr:title",
       "description": "cq:description",
       "keywords": "cq:keywords"
-    },
-    "updateFields": ["title", "description"]
+    }
   }
 }
 ```
 
 Other CMS types (WordPress, Drupal) will get their own schemas in future releases.
 
-`updateFields` lets you control which logical fields are pushed back. Omit it (or leave the array empty) to update all three (`title`, `description`, `keywords`).
+The tool will update all fields defined in `propertyMap`. To control which fields are updated, simply adjust the keys in `propertyMap`.
 
 ---
 
