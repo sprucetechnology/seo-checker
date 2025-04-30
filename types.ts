@@ -55,6 +55,7 @@ export interface PageMetadata {
   error?: string;
   suggestedTitle?: string;
   suggestedDescription?: string;
+  suggestedKeywords?: string;
   html?: string;
 }
 

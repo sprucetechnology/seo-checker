@@ -122,6 +122,7 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
         descriptionLength: page.descriptionLength || 0,
         descriptionScore: page.descriptionScore || "",
         keywords: page.keywords || "",
+        suggestedKeywords: page.suggestedKeywords || "",
         keywordsCount: page.keywordsCount || 0,
         h1Count: page.h1Count || 0,
         h1Score: page.h1Score || "",

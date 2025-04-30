@@ -1,7 +1,7 @@
 import { PageMetadata } from "./types.ts";
 import { DOMParser } from "https://deno.land/x/deno_dom/deno-dom-wasm.ts";
 import { normalizeUrl, isSameDomain } from "./utils/url.ts";
-import { suggestTitleAndDescription } from "./openai.ts";
+import { suggestTitleDescriptionKeywords } from "./openai.ts";
 
 export async function extractMetadata({ url, depth, sitemapData, sitemapUrls, openai, options, baseHostname }: {
   url: string;
@@ -60,16 +60,19 @@ export async function extractMetadata({ url, depth, sitemapData, sitemapUrls, op
     const inSitemap = sitemapUrls.some((item) => item.url === url);
     let suggestedTitle: string | undefined = undefined;
     let suggestedDescription: string | undefined = undefined;
-    if (titleScore === "needs improvement" || descriptionScore === "needs improvement") {
-      const suggestions = await suggestTitleAndDescription({
+    let suggestedKeywords: string | undefined = undefined;
+    if (titleScore === "needs improvement" || descriptionScore === "needs improvement" || keywordsScore === "needs improvement") {
+      const suggestions = await suggestTitleDescriptionKeywords({
         html,
         url,
         currentTitle: title,
         currentDescription: description,
+        currentKeywords: keywords,
         openai,
       });
       suggestedTitle = suggestions.suggestedTitle;
       suggestedDescription = suggestions.suggestedDescription;
+      suggestedKeywords = suggestions.suggestedKeywords;
     }
     return {
       url,
@@ -102,6 +105,7 @@ export async function extractMetadata({ url, depth, sitemapData, sitemapUrls, op
       changefreq: sitemapData?.changefreq || null,
       suggestedTitle,
       suggestedDescription,
+      suggestedKeywords,
       html,
     };
   } catch (error) {
