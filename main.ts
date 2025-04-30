@@ -1,17 +1,19 @@
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import { parse as parseFlags } from "https://deno.land/std/flags/mod.ts";
+import { pushToCms } from "./cms/index.ts";
 import * as colors from "https://deno.land/std/fmt/colors.ts";
 import OpenAI from "openai";
 import { crawl } from "./crawl.ts";
 import { getSitemapFromRobots } from "./robots.ts";
 import { getCacheFilenameFromUrl } from "./utils/url.ts";
 import { CrawlOptions } from "./types.ts";
+import { resolve } from "https://deno.land/std/path/mod.ts";
 
 const openai = new OpenAI();
 
 const flags = parseFlags(Deno.args, {
-  string: ["url", "sitemap", "output", "format", "user-agent"],
-  boolean: ["sitemap-only", "follow-links", "help", "force"],
+  string: ["url", "page", "sitemap", "output", "format", "user-agent", "cms-config"],
+  boolean: ["sitemap-only", "follow-links", "help", "force", "push-cms"],
   default: {
     depth: 3,
     output: "seo-report",
@@ -23,6 +25,7 @@ const flags = parseFlags(Deno.args, {
     "follow-links": true,
     "sitemap-only": false,
     force: false,
+    "push-cms": false,
   },
   alias: {
     u: "url",
@@ -35,6 +38,9 @@ const flags = parseFlags(Deno.args, {
     c: "concurrency",
     h: "help",
     F: "force",
+    P: "push-cms",
+    C: "cms-config",
+    p: "page",
   },
 });
 
@@ -42,15 +48,23 @@ if (flags.help) {
   console.log(`\nSEO Metadata Crawler\n\nUSAGE:\n  deno run --allow-net --allow-write --allow-read main.ts --url <url> [options]\n`);
   Deno.exit(0);
 }
-if (!flags.url) {
+if (!flags.url && !flags.page) {
   console.error(colors.red("Error: URL is required"));
   Deno.exit(1);
 }
+// If --page supplied, crawl just that page
+if (flags.page) {
+  flags.url = flags.page;
+  flags["follow-links"] = false;
+}
+const singlePageMode = Boolean(flags.page);
+const targetUrl = flags.url as string; // guaranteed defined after validation
+
 const options: CrawlOptions = {
-  url: flags.url,
+  url: targetUrl,
   sitemap: flags.sitemap || null,
   depth: flags.depth as number,
-  output: flags.output || getCacheFilenameFromUrl(flags.url),
+  output: flags.output || getCacheFilenameFromUrl(targetUrl),
   format: flags.format as "json" | "csv" | "html",
   limit: flags.limit as number,
   timeout: flags.timeout as number,
@@ -59,7 +73,16 @@ const options: CrawlOptions = {
   sitemapOnly: flags["sitemap-only"],
   followLinks: flags["follow-links"],
   force: flags["force"],
+  singlePage: singlePageMode,
 };
+
+if (singlePageMode) {
+  // Ensure no sitemap parsing and minimal crawl footprint
+  options.sitemap = "";
+  options.depth = 0;
+  options.limit = 1;
+}
+
 let baseUrl = options.url;
 if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
   baseUrl = "https://" + baseUrl;
@@ -78,4 +101,20 @@ if (!sitemapUrl) {
   }
 }
 options.sitemap = sitemapUrl;
-await crawl({ baseUrl, baseHostname, options, openai }); 
+
+const pages = await crawl({ baseUrl, baseHostname, options, openai });
+
+if (flags["push-cms"]) {
+  if (!flags["cms-config"]) {
+    console.error(colors.red("--cms-config path is required when --push-cms is enabled"));
+    Deno.exit(1);
+  }
+  const configPath = resolve(String(flags["cms-config"]));
+  try {
+    const configText = await Deno.readTextFile(configPath);
+    const cmsOptions = JSON.parse(configText);
+    await pushToCms(cmsOptions, pages);
+  } catch (err) {
+    console.error(colors.red(`Failed to push to CMS: ${err instanceof Error ? err.message : String(err)}`));
+  }
+} 

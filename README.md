@@ -16,6 +16,7 @@ A command-line utility written in **[Deno](https://deno.land)** that crawls a we
 * Can run in *sitemap-only* mode or follow in-page links
 * **Resumes from cache**: will not re-crawl already processed pages
 * Uses a `.env` file for your OpenAI API key
+* **[NEW] Optional "push-back" add-on** – write the suggested metadata straight into your CMS (AEM today, WordPress/Drupal soon)
 
 ---
 
@@ -54,6 +55,7 @@ deno run --allow-net --allow-read --allow-write --allow-env main.ts --url https:
 | Flag | Alias | Default | Description |
 | ---- | ----- | ------- | ----------- |
 | `--url` | `-u` | – | **Required.** Base URL to crawl |
+| `--page` | `-p` | – | Crawl a single page only (disables link following) |
 | `--sitemap` | `-s` | `BASE_URL/sitemap.xml` | Explicit sitemap URL |
 | `--depth` | `-d` | `3` | Maximum crawl depth |
 | `--limit` | `-l` | `100` | Max pages to process |
@@ -65,7 +67,11 @@ deno run --allow-net --allow-read --allow-write --allow-env main.ts --url https:
 | `--follow-links` | – | `true` | Follow in-page links |
 | `--user-agent` | – | `SEO-Metadata-Crawler/1.0 (Deno)` | Custom UA string |
 | `--force` | `-F` | `false` | (Planned) Ignore cache and force fresh crawl |
+| `--push-cms` | `-P` | `false` | Push suggested metadata back into CMS |
+| `--cms-config` | `-C` | – | Path to CMS JSON config (required with `--push-cms`) |
 | `--help` | `-h` | – | Show help |
+
+*Use either `--url` (site crawl) **or** `--page` (single-page crawl). If both are supplied, the single-page mode takes precedence.*
 
 ### Example
 
@@ -78,6 +84,38 @@ deno run --allow-net --allow-read --allow-write --allow-env main.ts \
 ```
 
 After completion you will find `seo-report.csv` (or `.json`/`.html`) in the output directory and a colourful summary printed to the terminal.
+
+### Pushing Updates to AEM
+
+```bash
+deno run --allow-net --allow-read --allow-write --allow-env main.ts \
+  --url https://www.example.com \
+  --push-cms \
+  --cms-config aem.json
+```
+
+`aem.json` example:
+```json
+{
+  "type": "aem",
+  "authorUrl": "https://author.example.com",
+  "publishUrl": "https://www.example.com",
+  "username": "service-user",
+  "password": "••••••",
+  "sitePathPrefix": "/content/mysite",
+  "replicateAfterUpdate": true,
+  "propertyMap": {
+    "title": "jcr:title",
+    "description": "cq:description",
+    "keywords": "cq:keywords"
+  },
+  "updateFields": ["title", "description"]
+}
+```
+
+Other CMS types (WordPress, Drupal) will get their own schemas in future releases.
+
+`updateFields` lets you control which logical fields are pushed back. Omit it (or leave the array empty) to update all three (`title`, `description`, `keywords`).
 
 ---
 
@@ -123,25 +161,4 @@ This creates a platform-specific executable named `seo-crawler` (or `.exe` on Wi
 
 ## 📝 Suggestions & Potential Improvements
 
-1. **Version Pinning / Import Map** – Pin external module versions to avoid breaking changes and improve cache hits. Maintain an `import_map.json`.
-2. **Type Safety** – Add explicit return types & leverage utility types to strengthen compile-time checks.
-3. **Robots.txt Respect** – Optionally fetch and respect `robots.txt` disallow rules.
-4. **Retry Logic & Exponential Backoff** – Gracefully retry failed requests instead of aborting immediately.
-5. **Cache Layer** – Cache previously fetched pages (e.g. in a `.cache` directory) to speed up repeated runs.
-6. **Advanced Scoring Algorithm** – Replace simple *good/needs improvement* heuristics with weighted scores (e.g. considering SERP best practices).
-7. **Parallel CSV/JSON Output** – Stream results to disk incrementally to reduce memory usage on very large sites.
-8. **Pluggable Output Renderers** – Support HTML or Markdown reports with charts/visualisations.
-9. **Unit Tests** – Add unit/integration tests using [deno test](https://deno.land/manual@latest/testing).
-10. **CI Workflow** – Provide GitHub Actions workflow that runs lint/format/test and builds binaries for major OSes.
-
----
-
-## 🙏 Contributing
-
-Issues and pull requests are welcome! Feel free to open an issue for bugs, feature requests or suggestions.
-
----
-
-## 📄 License
-
-MIT © 2024 
+1. **Version Pinning / Import Map** – Pin external module versions to avoid breaking changes and improve cache hits. Maintain an `

@@ -38,25 +38,31 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
     // No cache or error reading cache
   }
 
-  // Try to parse the sitemap
-  console.log(colors.blue(`Attempting to parse sitemap at ${options.sitemap || ''}`));
-  sitemapUrls = await parseSitemap(options.sitemap || '', { userAgent: options.userAgent, timeout: options.timeout });
-  const totalToProcess = Math.min(sitemapUrls.length || queue.length, options.limit);
-  console.log(colors.green(`Found ${sitemapUrls.length} URLs in sitemap.`));
+  if (!options.singlePage) {
+    console.log(colors.blue(`Attempting to parse sitemap at ${options.sitemap || ''}`));
+    sitemapUrls = await parseSitemap(options.sitemap || '', { userAgent: options.userAgent, timeout: options.timeout });
+    console.log(colors.green(`Found ${sitemapUrls.length} URLs in sitemap.`));
+  }
+  const totalToProcess = Math.min((sitemapUrls.length || queue.length) || 1, options.limit);
 
-  // Add sitemap URLs to the queue if not already in results
-  for (const item of sitemapUrls) {
-    if (!visited.has(item.url) && processed < options.limit) {
-      queue.push({
-        url: item.url,
-        depth: 0,
-        sitemapData: {
-          lastmod: item.lastmod,
-          priority: item.priority,
-          changefreq: item.changefreq,
-        },
-      });
-      console.log(colors.blue(`Queued from sitemap: ${item.url}`));
+  // If single page, push only the base URL once.
+  if (options.singlePage) {
+    queue.push({ url: baseUrl, depth: 0 });
+  } else {
+    // Add sitemap URLs to the queue if not already in results
+    for (const item of sitemapUrls) {
+      if (!visited.has(item.url) && processed < options.limit) {
+        queue.push({
+          url: item.url,
+          depth: 0,
+          sitemapData: {
+            lastmod: item.lastmod,
+            priority: item.priority,
+            changefreq: item.changefreq,
+          },
+        });
+        console.log(colors.blue(`Queued from sitemap: ${item.url}`));
+      }
     }
   }
 
@@ -171,4 +177,5 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
   }
   console.log(colors.green(`Crawl completed. Processed ${processed}/${sitemapUrls.length} pages.`));
   generateReport({ results, options, baseUrl });
+  return results;
 } 

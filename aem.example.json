@@ -1,0 +1,14 @@
+{
+  "type": "aem",
+  "authorUrl": "https://author.example.com",
+  "publishUrl": "https://www.example.com",
+  "username": "service-user",
+  "password": "YOUR_PASSWORD_OR_ENV_VAR",
+  "sitePathPrefix": "/content/mysite",
+  "replicateAfterUpdate": true,
+  "propertyMap": {
+    "title": "jcr:title",
+    "description": "cq:description",
+    "keywords": "cq:keywords"
+  }
+}

@@ -11,6 +11,9 @@ export interface CrawlOptions {
   sitemapOnly: boolean;
   followLinks: boolean;
   force: boolean;
+  singlePage?: boolean;
+  pushCms?: boolean;
+  cms?: CmsOptions;
 }
 
 export interface QueueItem {
@@ -86,4 +89,37 @@ export interface ReportSummary {
   canonicalCompleteness: number;
   pagesInSitemap: number;
   pagesNotInSitemap: number;
+}
+
+export interface CmsOptions {
+  /** CMS type identifier */
+  type: "aem" | "wordpress" | "drupal";
+
+  /** Generic base/admin URL for the CMS REST endpoint (used for WordPress/Drupal) */
+  baseUrl?: string;
+
+  /** AEM-specific: author instance URL */
+  authorUrl?: string;
+  /** AEM-specific: publish instance URL (needed only for URL ↔ JCR mapping) */
+  publishUrl?: string;
+
+  /** Credentials (username/password) or token (for WordPress) */
+  username?: string;
+  password?: string;
+  token?: string;
+
+  /** AEM only: Path prefix like "/content/mysite" used to convert public URL → JCR path */
+  sitePathPrefix?: string;
+
+  /** AEM only: whether to replicate page after updating */
+  replicateAfterUpdate?: boolean;
+
+  /** Custom mapping from logical fields (title, description, keywords) to CMS-specific property names */
+  propertyMap?: Record<string, string>;
+
+  /** Which logical fields to push back. Omit or empty = all. */
+  updateFields?: Array<"title" | "description" | "keywords">;
+
+  /** Namespace to use for tag creation (AEM only, e.g. 'redevelopment') */
+  tagNamespace?: string;
 } 
