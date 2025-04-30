@@ -1,3 +1,4 @@
+import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import { parse as parseFlags } from "https://deno.land/std/flags/mod.ts";
 import * as colors from "https://deno.land/std/fmt/colors.ts";
 import OpenAI from "openai";
@@ -76,4 +77,5 @@ if (!sitemapUrl) {
     sitemapUrl = `${baseProtocol}//${baseHostname}/sitemap.xml`;
   }
 }
+options.sitemap = sitemapUrl;
 await crawl({ baseUrl, baseHostname, options, openai }); 
