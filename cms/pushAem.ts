@@ -105,17 +105,12 @@ async function tagExists(opts: CmsOptions, tag: string): Promise<boolean> {
   }
 }
 
-async function createTag(opts: CmsOptions, tag: string) {
-  // Use lowercase/camelcase for node name, but keep jcr:title as original
-  const tagNodeName = tag
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+async function createTag(opts: CmsOptions, tagNodeName: string, tagLabel: string) {
   const tagNamespacePath = opts.tagNamespace?.replace(/\/$/, "");
   const url = `${opts.authorUrl}${tagNamespacePath}`;
   const body = new URLSearchParams();
   body.append(`./${tagNodeName}/jcr:primaryType`, "cq:Tag");
-  body.append(`./${tagNodeName}/jcr:title`, tag);
+  body.append(`./${tagNodeName}/jcr:title`, tagLabel);
   body.append(`./${tagNodeName}/sling:resourceType`, "cq/tagging/components/tag");
   const res = await fetch(url, {
     method: "POST",
@@ -126,8 +121,18 @@ async function createTag(opts: CmsOptions, tag: string) {
   });
   if (!res.ok) {
     const msg = await res.text();
-    throw new Error(`Failed to create tag ${tag}: ${res.status} ${msg}`);
+    throw new Error(`Failed to create tag ${tagLabel}: ${res.status} ${msg}`);
   }
+}
+
+// Add helper to select tag namespace based on page URL
+function getDynamicTagNamespace(pageUrl: string, opts: CmsOptions): string | undefined {
+  if (opts.tagNamespaceMap) {
+    for (const [pattern, ns] of Object.entries(opts.tagNamespaceMap)) {
+      if (pageUrl.includes(pattern)) return ns;
+    }
+  }
+  return opts.tagNamespace;
 }
 
 export async function pushToAem(opts: CmsOptions, pages: PageMetadata[]) {
@@ -164,8 +169,9 @@ export async function pushToAem(opts: CmsOptions, pages: PageMetadata[]) {
           .map(s => s.trim())
           .filter(Boolean);
         props[`${propertyMap.keywords}@TypeHint`] = "String[]";
-        if (propertyMap.keywords === "cq:tags" && opts.tagNamespace) {
-          const tagNamespaceId = opts.tagNamespace?.split("/").pop();
+        if (propertyMap.keywords === "cq:tags") {
+          const dynamicNamespace = getDynamicTagNamespace(page.url, opts);
+          const tagNamespaceId = dynamicNamespace?.split("/cq:tags/")[1];
           const tagNodeNames: string[] = [];
           for (const tag of tags) {
             const tagNodeName = tag
@@ -173,12 +179,12 @@ export async function pushToAem(opts: CmsOptions, pages: PageMetadata[]) {
               .replace(/[^a-z0-9]+/g, "-")
               .replace(/^-+|-+$/g, "");
             tagNodeNames.push(tagNodeName);
-            const exists = await tagExists(opts, tagNodeName);
+            const exists = await tagExists({ ...opts, tagNamespace: dynamicNamespace }, tagNodeName);
             if (!exists) {
-              console.log(colors.yellow(`Creating tag: ${opts.tagNamespace}/${tagNodeName}`));
-              await createTag(opts, tagNodeName);
+              console.log(colors.yellow(`Creating tag: ${dynamicNamespace}/${tagNodeName}`));
+              await createTag({ ...opts, tagNamespace: dynamicNamespace }, tagNodeName, tag);
             } else {
-              console.log(colors.gray(`Tag exists: ${opts.tagNamespace}/${tagNodeName}`));
+              console.log(colors.gray(`Tag exists: ${dynamicNamespace}/${tagNodeName}`));
             }
           }
           // Assign as <namespace>:<tag-node-name>

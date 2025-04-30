@@ -122,4 +122,7 @@ export interface CmsOptions {
 
   /** Namespace to use for tag creation (AEM only, e.g. 'redevelopment') */
   tagNamespace?: string;
+
+  /** Map of URL/path patterns to tag namespaces for dynamic assignment */
+  tagNamespaceMap?: Record<string, string>;
 } 
