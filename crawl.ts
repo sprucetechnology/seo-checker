@@ -41,6 +41,7 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
   // Try to parse the sitemap
   console.log(colors.blue(`Attempting to parse sitemap at ${options.sitemap || ''}`));
   sitemapUrls = await parseSitemap(options.sitemap || '', { userAgent: options.userAgent, timeout: options.timeout });
+  const totalToProcess = Math.min(sitemapUrls.length || queue.length, options.limit);
   console.log(colors.green(`Found ${sitemapUrls.length} URLs in sitemap.`));
 
   // Add sitemap URLs to the queue if not already in results
@@ -68,7 +69,7 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
 
   while (queue.length > 0 && processed < options.limit) {
     const batch = queue.splice(0, options.concurrency);
-    console.log(colors.yellow(`Processing batch of ${batch.length} URLs... (${processed}/${options.limit})`));
+    console.log(colors.yellow(`Processing batch of ${batch.length} URLs... (Processed ${processed}/${sitemapUrls.length})`));
     const promises = batch.map(async item => {
       if (visited.has(item.url)) return null;
       visited.add(item.url);
@@ -154,7 +155,7 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
         pages: results,
       }, outFilename);
     }
-    console.log(colors.yellow(`Batch complete. Total processed: ${results.length}`));
+    console.log(colors.yellow(`Batch complete. Total processed: ${results.length}/${sitemapUrls.length}`));
     // If we're following links and haven't reached max depth, add links to the queue
     for (const result of batchResults) {
       if (!result) continue;
@@ -168,6 +169,6 @@ export async function crawl({ baseUrl, baseHostname, options, openai }: {
       }
     }
   }
-  console.log(colors.green(`Crawl completed. Processed ${processed} pages.`));
+  console.log(colors.green(`Crawl completed. Processed ${processed}/${sitemapUrls.length} pages.`));
   generateReport({ results, options, baseUrl });
 } 
