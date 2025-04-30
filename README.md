@@ -159,9 +159,3 @@ This creates a platform-specific executable named `seo-crawler` (or `.exe` on Wi
 ├── .env            # Your OpenAI API key
 └── README.md       # This file
 ```
-
----
-
-## 📝 Suggestions & Potential Improvements
-
-1. **Version Pinning / Import Map** – Pin external module versions to avoid breaking changes and improve cache hits. Maintain an `
