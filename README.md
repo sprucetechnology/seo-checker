@@ -68,7 +68,7 @@ deno run --allow-net --allow-read --allow-write --allow-env main.ts --url https:
 | `--user-agent` | – | `SEO-Metadata-Crawler/1.0 (Deno)` | Custom UA string |
 | `--force` | `-F` | `false` | (Planned) Ignore cache and force fresh crawl |
 | `--push-cms` | `-P` | `false` | Push suggested metadata back into CMS |
-| `--cms-config` | `-C` | – | Path to CMS JSON config (required with `--push-cms`) |
+| `--cms-config` | `-C` | `cms.json` | Path to CMS JSON config (optional, defaults to cms.json) |
 | `--help` | `-h` | – | Show help |
 
 *Use either `--url` (site crawl) **or** `--page` (single-page crawl). If both are supplied, the single-page mode takes precedence.*
@@ -90,26 +90,30 @@ After completion you will find `seo-report.csv` (or `.json`/`.html`) in the outp
 ```bash
 deno run --allow-net --allow-read --allow-write --allow-env main.ts \
   --url https://www.example.com \
-  --push-cms \
-  --cms-config aem.json
+  --push-cms
 ```
 
-`aem.json` example:
+# Or specify a custom config file:
+# deno run ... --push-cms --cms-config path/to/your-config.json
+
+`cms.json` example:
 ```json
 {
-  "type": "aem",
-  "authorUrl": "https://author.example.com",
-  "publishUrl": "https://www.example.com",
-  "username": "service-user",
-  "password": "••••••",
-  "sitePathPrefix": "/content/mysite",
-  "replicateAfterUpdate": true,
-  "propertyMap": {
-    "title": "jcr:title",
-    "description": "cq:description",
-    "keywords": "cq:keywords"
-  },
-  "updateFields": ["title", "description"]
+  "aem": {
+    "type": "aem",
+    "authorUrl": "https://author.example.com",
+    "publishUrl": "https://www.example.com",
+    "username": "service-user",
+    "password": "••••••",
+    "sitePathPrefix": "/content/mysite",
+    "replicateAfterUpdate": true,
+    "propertyMap": {
+      "title": "jcr:title",
+      "description": "cq:description",
+      "keywords": "cq:keywords"
+    },
+    "updateFields": ["title", "description"]
+  }
 }
 ```
 

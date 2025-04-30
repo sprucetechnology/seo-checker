@@ -1,0 +1,27 @@
+{
+  "aem": {
+    "type": "aem",
+    "authorUrl": "https://author.example.com",
+    "publishUrl": "https://www.example.com",
+    "username": "service-user",
+    "password": "YOUR_PASSWORD_OR_ENV_VAR",
+    "sitePathPrefix": "/content/mysite",
+    "replicateAfterUpdate": true,
+    "propertyMap": {
+      "title": "jcr:title",
+      "description": "cq:description",
+      "keywords": "cq:keywords"
+    }
+  },
+  "wordpress": {
+    "type": "wordpress",
+    "baseUrl": "https://your-wordpress-site.com/wp-json/wp/v2",
+    "username": "your-wp-username",
+    "password": "YOUR_WP_APP_PASSWORD_OR_TOKEN",
+    "propertyMap": {
+      "title": "title.rendered",
+      "description": "excerpt.rendered",
+      "keywords": "tags"
+    }
+  }
+} 

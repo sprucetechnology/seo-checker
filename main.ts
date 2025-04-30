@@ -105,16 +105,19 @@ options.sitemap = sitemapUrl;
 const pages = await crawl({ baseUrl, baseHostname, options, openai });
 
 if (flags["push-cms"]) {
-  if (!flags["cms-config"]) {
-    console.error(colors.red("--cms-config path is required when --push-cms is enabled"));
-    Deno.exit(1);
-  }
-  const configPath = resolve(String(flags["cms-config"]));
+  // Default to cms.json if --cms-config is not specified
+  const configPath = resolve(String(flags["cms-config"] || "cms.json"));
   try {
     const configText = await Deno.readTextFile(configPath);
-    const cmsOptions = JSON.parse(configText);
+    const config = JSON.parse(configText);
+    // Determine which CMS to use. For now, default to 'aem'.
+    const cmsType = config.aem ? 'aem' : Object.keys(config)[0];
+    const cmsOptions = config[cmsType];
     await pushToCms(cmsOptions, pages);
   } catch (err) {
     console.error(colors.red(`Failed to push to CMS: ${err instanceof Error ? err.message : String(err)}`));
+    if (err instanceof Deno.errors.NotFound) {
+      console.error(colors.red("cms.json not found. Please provide a config file with --cms-config or create cms.json in your project root."));
+    }
   }
 } 
