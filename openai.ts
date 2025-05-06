@@ -2,7 +2,10 @@ import OpenAI from "openai";
 
 export async function suggestTitleDescriptionKeywords({ html, url, currentTitle, currentDescription, currentKeywords, openai } : { html: string; url: string; currentTitle?: string; currentDescription?: string; currentKeywords?: string; openai: OpenAI; }): Promise<{ suggestedTitle?: string; suggestedDescription?: string; suggestedKeywords?: string }> {
   try {
-    let prompt = `You are an expert SEO assistant. Given the following HTML content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters), meta description (max 155 characters), and a set of 3-8 SEO keywords (comma-separated, no hashtags) for SEO. Dont suggest the following keywords: Port Authority, Redevelopment, New York, New Jersey. \n`;
+    let prompt = `You are an expert SEO assistant.
+    Given the following HTML content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters), meta description (max 155 characters), and a set of 3-4 SEO keywords (comma-separated, no hashtags) for SEO.
+    Dont suggest the following keywords: Port Authority, Redevelopment, New York, New Jersey. \n`;
+
     if (currentTitle) {
       prompt += `\nCurrent title: "${currentTitle}"`;
     }
