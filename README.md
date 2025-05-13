@@ -17,6 +17,7 @@ A command-line utility written in **[Deno](https://deno.land)** that crawls a we
 * **Resumes from cache**: will not re-crawl already processed pages
 * Uses a `.env` file for your OpenAI API key
 * **[NEW] Optional "push-back" add-on** – write the suggested metadata straight into your CMS (AEM today, WordPress/Drupal soon)
+* **[OPTIONAL] Reference keyword support:** Place `.xlsx` files with keyword data in a `references/` folder to enhance keyword suggestions based on your own search data
 
 ---
 
@@ -120,6 +121,17 @@ Other CMS types (WordPress, Drupal) will get their own schemas in future release
 
 The tool will update all fields defined in `propertyMap`. To control which fields are updated, simply adjust the keys in `propertyMap`.
 
+### Optional: Using Reference Keyword Data
+
+To further improve the relevance of suggested keywords, you can provide your own search data:
+
+- Create a `references/` folder in the project root.
+- Place one or more `.xlsx` files containing your keyword, clicks, and impressions data (e.g., exported from Google Search Console).
+- The tool will automatically extract and prioritize top keywords from these files when generating suggestions.
+- The `.xlsx` files should have columns for keywords, clicks, and impressions (column names are detected automatically).
+
+This is optional, but highly recommended for tailoring suggestions to your site's actual search performance.
+
 ---
 
 ## 🏗 Building a Native Executable
@@ -159,3 +171,12 @@ This creates a platform-specific executable named `seo-crawler` (or `.exe` on Wi
 ├── .env            # Your OpenAI API key
 └── README.md       # This file
 ```
+
+---
+
+## 📝 Changelog
+
+### 2024-06-10
+- **Enhanced SEO keyword suggestion logic:**
+  - The tool now prioritizes top keywords based on impressions and clicks when suggesting improved metadata.
+  - The OpenAI prompt for suggestions now uses extracted visible text content from the HTML, improving the relevance of generated titles, descriptions, and keywords.
