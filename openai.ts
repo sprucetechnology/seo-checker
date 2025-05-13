@@ -1,19 +1,15 @@
 import OpenAI from "openai";
 import { ReferenceKeyword } from "./utils/xlsx.ts";
-import { extractTextFromHtml } from "./utils/html.ts";
 
 export async function suggestTitleDescriptionKeywords({ html, url, currentTitle, currentDescription, currentKeywords, openai, referenceKeywords } : { html: string; url: string; currentTitle?: string; currentDescription?: string; currentKeywords?: string; openai: OpenAI; referenceKeywords?: ReferenceKeyword[] }): Promise<{ suggestedTitle?: string; suggestedDescription?: string; suggestedKeywords?: string }> {
   try {
-    // Extract only visible text content from HTML
-    const textContent = extractTextFromHtml(html);
-    let prompt = `You are an expert SEO assistant.\nGiven the following page text content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters), meta description (max 155 characters), and a set of 3-4 SEO keywords (comma-separated, no hashtags) for SEO.\nDont suggest the following keywords: Port Authority, Redevelopment, New York, New Jersey. \n`;
+    let prompt = `You are an expert SEO assistant.\nGiven the following HTML content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters), meta description (max 155 characters), and a set of 3-4 SEO keywords (comma-separated, no hashtags) for SEO.\nDont suggest the following keywords: Port Authority, Redevelopment, New York, New Jersey. \n`;
 
-    console.log('referenceKeywords', referenceKeywords);
     if (referenceKeywords && referenceKeywords.length > 0) {
       const topKeywords = referenceKeywords.slice(0, 10)
         .map(k => `${k.keyword}${k.clicks ? ` (clicks: ${k.clicks}` : ""}${k.impressions ? `, impressions: ${k.impressions}` : ""}${k.clicks || k.impressions ? ")" : ""}`)
         .join(", ");
-      prompt += `\nPrioritize or include relevant keywords from this list (with their recent performance): ${topKeywords}`;
+      prompt += `\nIts okay to suggest new keywords but prioritize ones from this list when appropriate: ${topKeywords}`;
     }
 
     if (currentTitle) {
@@ -25,11 +21,10 @@ export async function suggestTitleDescriptionKeywords({ html, url, currentTitle,
     if (currentKeywords) {
       prompt += `\nCurrent keywords: "${currentKeywords}"`;
     }
-    prompt += `\nPage text content:\n${textContent.substring(0, 4000)}\n---\nRespond in JSON with keys 'suggestedTitle', 'suggestedDescription', and 'suggestedKeywords'.`;
+    prompt += `\nHTML:\n${html.substring(0, 4000)}\n---\nRespond in JSON with keys 'suggestedTitle', 'suggestedDescription', and 'suggestedKeywords'.`;
 
-    console.log(prompt);
     const completion = await openai.chat.completions.create({
-      model: "gpt-4-1106-preview",
+      model: "gpt-4.1-2025-04-14",
       messages: [
         { role: "system", content: "You are a helpful assistant for SEO metadata optimization." },
         { role: "user", content: prompt },
@@ -46,7 +41,7 @@ export async function suggestTitleDescriptionKeywords({ html, url, currentTitle,
         return {
           suggestedTitle: parsed.suggestedTitle,
           suggestedDescription: parsed.suggestedDescription,
-          suggestedKeywords: parsed.suggestedKeywords,
+          suggestedKeywords: parsed.suggestedKeywords ? parsed.suggestedKeywords.toLowerCase() : undefined,
         };
       } catch (e) {
         const matchTitle = content.match(/"suggestedTitle"\s*:\s*"([^"]+)"/);
@@ -55,7 +50,7 @@ export async function suggestTitleDescriptionKeywords({ html, url, currentTitle,
         return {
           suggestedTitle: matchTitle ? matchTitle[1] : undefined,
           suggestedDescription: matchDesc ? matchDesc[1] : undefined,
-          suggestedKeywords: matchKeywords ? matchKeywords[1] : undefined,
+          suggestedKeywords: matchKeywords ? matchKeywords[1].toLowerCase() : undefined,
         };
       }
     }
