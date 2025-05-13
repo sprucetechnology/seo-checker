@@ -1,6 +1,7 @@
 {
   "imports": {
     "openai": "https://deno.land/x/openai@v4.20.1/mod.ts",
-    "openai/": "https://deno.land/x/openai@v4.20.1/"
+    "openai/": "https://deno.land/x/openai@v4.20.1/",
+    "xlsx": "https://esm.sh/xlsx@0.18.5"
   }
 } 

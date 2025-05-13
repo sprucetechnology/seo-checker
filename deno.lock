@@ -1,11 +1,23 @@
 {
   "version": "4",
   "specifiers": {
-    "jsr:@std/dotenv@*": "0.225.2"
+    "jsr:@std/dotenv@*": "0.225.2",
+    "npm:@types/node@*": "22.12.0"
   },
   "jsr": {
     "@std/dotenv@0.225.2": {
       "integrity": "e2025dce4de6c7bca21dece8baddd4262b09d5187217e231b033e088e0c4dd23"
+    }
+  },
+  "npm": {
+    "@types/node@22.12.0": {
+      "integrity": "sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==",
+      "dependencies": [
+        "undici-types"
+      ]
+    },
+    "undici-types@6.20.0": {
+      "integrity": "sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg=="
     }
   },
   "redirects": {
@@ -191,6 +203,8 @@
     "https://deno.land/x/xml@6.0.4/mod.ts": "b59e5c0dd9fe7ed597c21c39aacf089aa82fe5c5eaad3f411a43a9c104359f4e",
     "https://deno.land/x/xml@6.0.4/parse.ts": "1302c75d8fd40df39310bb8ae6716302f0b77c61c607437dc023d3d792a0df54",
     "https://deno.land/x/xml@6.0.4/stringify.ts": "0e2f79798d413c5386bf5de90bbe9901f99951ceae484050a8ef89e2b4da9dd0",
-    "https://deno.land/x/xml@6.0.4/wasm_xml_parser/wasm_xml_parser.js": "0804d738e6d94284b043546260b547bb4731fbfd3b3851139740e863dabf25bd"
+    "https://deno.land/x/xml@6.0.4/wasm_xml_parser/wasm_xml_parser.js": "0804d738e6d94284b043546260b547bb4731fbfd3b3851139740e863dabf25bd",
+    "https://esm.sh/xlsx@0.18.5": "feaad96c2697fd87d8d2cbf00030869f6f3cb87afc6f58c92602f1e33309dc03",
+    "https://esm.sh/xlsx@0.18.5/denonext/xlsx.mjs": "8d4ffaee8d26c9cf8b07a16cb49d7ecb47abe95a5ec4bf850e0e29281101a595"
   }
 }

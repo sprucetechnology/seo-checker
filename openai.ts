@@ -1,10 +1,20 @@
 import OpenAI from "openai";
+import { ReferenceKeyword } from "./utils/xlsx.ts";
+import { extractTextFromHtml } from "./utils/html.ts";
 
-export async function suggestTitleDescriptionKeywords({ html, url, currentTitle, currentDescription, currentKeywords, openai } : { html: string; url: string; currentTitle?: string; currentDescription?: string; currentKeywords?: string; openai: OpenAI; }): Promise<{ suggestedTitle?: string; suggestedDescription?: string; suggestedKeywords?: string }> {
+export async function suggestTitleDescriptionKeywords({ html, url, currentTitle, currentDescription, currentKeywords, openai, referenceKeywords } : { html: string; url: string; currentTitle?: string; currentDescription?: string; currentKeywords?: string; openai: OpenAI; referenceKeywords?: ReferenceKeyword[] }): Promise<{ suggestedTitle?: string; suggestedDescription?: string; suggestedKeywords?: string }> {
   try {
-    let prompt = `You are an expert SEO assistant.
-    Given the following HTML content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters), meta description (max 155 characters), and a set of 3-4 SEO keywords (comma-separated, no hashtags) for SEO.
-    Dont suggest the following keywords: Port Authority, Redevelopment, New York, New Jersey. \n`;
+    // Extract only visible text content from HTML
+    const textContent = extractTextFromHtml(html);
+    let prompt = `You are an expert SEO assistant.\nGiven the following page text content for the page at ${url}, suggest an improved, concise, and relevant <title> (max 60 characters), meta description (max 155 characters), and a set of 3-4 SEO keywords (comma-separated, no hashtags) for SEO.\nDont suggest the following keywords: Port Authority, Redevelopment, New York, New Jersey. \n`;
+
+    console.log('referenceKeywords', referenceKeywords);
+    if (referenceKeywords && referenceKeywords.length > 0) {
+      const topKeywords = referenceKeywords.slice(0, 10)
+        .map(k => `${k.keyword}${k.clicks ? ` (clicks: ${k.clicks}` : ""}${k.impressions ? `, impressions: ${k.impressions}` : ""}${k.clicks || k.impressions ? ")" : ""}`)
+        .join(", ");
+      prompt += `\nPrioritize or include relevant keywords from this list (with their recent performance): ${topKeywords}`;
+    }
 
     if (currentTitle) {
       prompt += `\nCurrent title: "${currentTitle}"`;
@@ -15,8 +25,9 @@ export async function suggestTitleDescriptionKeywords({ html, url, currentTitle,
     if (currentKeywords) {
       prompt += `\nCurrent keywords: "${currentKeywords}"`;
     }
-    prompt += `\nHTML:\n${html.substring(0, 4000)}\n---\nRespond in JSON with keys 'suggestedTitle', 'suggestedDescription', and 'suggestedKeywords'.`;
+    prompt += `\nPage text content:\n${textContent.substring(0, 4000)}\n---\nRespond in JSON with keys 'suggestedTitle', 'suggestedDescription', and 'suggestedKeywords'.`;
 
+    console.log(prompt);
     const completion = await openai.chat.completions.create({
       model: "gpt-4-1106-preview",
       messages: [
